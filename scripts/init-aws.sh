@@ -24,28 +24,35 @@ awslocal logs create-log-stream --log-group-name /aiops/services --log-stream-na
 awslocal logs create-log-stream --log-group-name /aiops/services --log-stream-name inventory-api     2>/dev/null || true
 
 echo "Creating mock EC2 instances..."
+
+# Auth node — Project=aiops tag added so backend filter works
 awslocal ec2 run-instances \
   --image-id ami-00000001 \
   --instance-type t2.micro \
   --count 1 \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=auth-node-1},{Key=Service,Value=auth}]' \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=auth-node-1},{Key=Service,Value=auth},{Key=Project,Value=aiops}]' \
   2>/dev/null || true
 
+# Payment node — Project=aiops tag added
 awslocal ec2 run-instances \
   --image-id ami-00000001 \
   --instance-type t2.micro \
   --count 1 \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=payment-node-1},{Key=Service,Value=payment}]' \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=payment-node-1},{Key=Service,Value=payment},{Key=Project,Value=aiops}]' \
   2>/dev/null || true
 
+# Inventory node — Project=aiops tag added
 awslocal ec2 run-instances \
   --image-id ami-00000001 \
   --instance-type t2.micro \
   --count 1 \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=inventory-node-1},{Key=Service,Value=inventory}]' \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=inventory-node-1},{Key=Service,Value=inventory},{Key=Project,Value=aiops}]' \
   2>/dev/null || true
 
 echo "Verifying EC2 instances..."
-awslocal ec2 describe-instances --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,Name:Tags[?Key==`Name`]|[0].Value}' --output table 2>/dev/null || true
+awslocal ec2 describe-instances \
+  --filters "Name=tag:Project,Values=aiops" \
+  --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,Name:Tags[?Key==`Name`]|[0].Value,Project:Tags[?Key==`Project`]|[0].Value}' \
+  --output table 2>/dev/null || true
 
 echo "=== Project 1 Init Complete ==="

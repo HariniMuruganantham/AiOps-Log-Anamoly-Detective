@@ -125,14 +125,23 @@ def build_chains(df, clusters):
 def generate_report(chain: dict) -> dict:
     if not openai_client:
         return {
-            "title":          f"{chain['root_cause']} incident",
-            "summary":        f"Anomaly detected in {chain['root_cause']}. "
-                              f"Propagated to: {', '.join(chain['propagation'])}.",
-            "impact":         f"Services affected: {', '.join(chain['propagation'])}",
-            "severity":       "P2" if chain["severity"] == "critical" else "P3",
-            "remediation":    ["Check service logs",
-                               "Restart affected service",
-                               "Monitor error rate"],
+            "title":           f"{chain['root_cause']} incident",
+            "summary":         f"Anomaly detected in {chain['root_cause']}. "
+                               f"Propagated to: {', '.join(chain['propagation'])}.",
+            "what_happened":   f"A latency spike was detected in {chain['root_cause']} "
+                               f"causing {chain['error_count']} errors across the cluster.",
+            "impact":          f"Services affected: {', '.join(chain['propagation'])}",
+            "severity":        "P2" if chain["severity"] == "critical" else "P3",
+            "remediation":     [
+                                   "Check service logs for root error",
+                                   "Restart affected service container",
+                                   "Monitor error rate for next 5 minutes"
+                               ],
+            "next_steps":      [
+                                   {"action": "Triage root service", "status": "active"},
+                                   {"action": "Notify on-call team",  "status": "pending"},
+                                   {"action": "Post-incident review", "status": "pending"}
+                               ],
             "estimated_cause": "High latency spike detected by Isolation Forest"
         }
 
@@ -141,14 +150,23 @@ def generate_report(chain: dict) -> dict:
         response_format={"type": "json_object"},
         messages=[
             {"role": "system",
-             "content": "You are an AIOps incident analyst. Return JSON only."},
+             "content": "You are an AIOps incident analyst. Return JSON only. No markdown."},
             {"role": "user",
              "content": f"""Analyze this real incident chain from CloudWatch logs:
 {json.dumps(chain, indent=2, default=str)}
-Return JSON: title, summary, impact, severity (P1/P2/P3),
-remediation (list of 3), estimated_cause"""}
+
+Return a JSON object with exactly these keys:
+- title: short incident title (max 10 words)
+- summary: 2-sentence plain-English summary for an on-call engineer
+- what_happened: 1-2 sentences explaining the sequence of events
+- impact: which services were affected and how
+- severity: one of P1, P2, P3
+- estimated_cause: 1 sentence on the likely technical root cause
+- remediation: list of exactly 3 actionable steps
+- next_steps: list of 3 objects each with "action" (string) and "status" (one of: done, active, pending)
+"""}
         ],
-        max_tokens=500,
+        max_tokens=600,
         temperature=0.3
     )
     return json.loads(resp.choices[0].message.content)
@@ -197,9 +215,9 @@ def analyze(
 
     if len(logs) < 5:
         return {
-            "error":    "Not enough logs yet. Wait 30s for services to generate logs.",
+            "error":     "Not enough logs yet. Wait 30s for services to generate logs.",
             "log_count": len(logs),
-            "tip":      "Try increasing minutes_back"
+            "tip":       "Try increasing minutes_back"
         }
 
     df, clusters = detect_anomalies(logs)
@@ -246,7 +264,7 @@ def services_status():
 
 @app.post("/services/{service}/crash")
 def inject_crash(service: str, duration: int = 60):
-    """Inject a real failure into a running service — for demo."""
+    """Inject a real failure into a running service."""
     import httpx
     urls = {
         "auth-service":    os.getenv("AUTH_URL",      "http://auth-svc:5001"),
@@ -258,6 +276,24 @@ def inject_crash(service: str, duration: int = 60):
     try:
         r = httpx.post(f"{urls[service]}/crash",
                        json={"duration": duration}, timeout=5)
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/services/{service}/recover")
+def recover_service(service: str):
+    """Recover a degraded service."""
+    import httpx
+    urls = {
+        "auth-service":    os.getenv("AUTH_URL",      "http://auth-svc:5001"),
+        "payment-service": os.getenv("PAYMENT_URL",   "http://payment-svc:5002"),
+        "inventory-api":   os.getenv("INVENTORY_URL", "http://inventory-svc:5003"),
+    }
+    if service not in urls:
+        return {"error": f"Unknown service: {service}"}
+    try:
+        r = httpx.post(f"{urls[service]}/recover", timeout=5)
         return r.json()
     except Exception as e:
         return {"error": str(e)}
@@ -303,7 +339,7 @@ def aws_ec2():
 
 @app.get("/aws/logs")
 def aws_logs():
-    """CloudWatch log groups + streams — mirrors AWS Console CloudWatch."""
+    """CloudWatch log groups + streams."""
     try:
         groups = cw_logs.describe_log_groups(logGroupNamePrefix="/aiops")
         result = []
@@ -316,15 +352,15 @@ def aws_logs():
             stream_list = streams.get("logStreams", [])
             recent      = pull_real_logs(minutes_back=60)
             result.append({
-                "log_group":       g["logGroupName"],
-                "stored_bytes":    g.get("storedBytes", 0),
-                "retention_days":  g.get("retentionInDays", "Never expire"),
-                "stream_count":    len(stream_list),
+                "log_group":          g["logGroupName"],
+                "stored_bytes":       g.get("storedBytes", 0),
+                "retention_days":     g.get("retentionInDays", "Never expire"),
+                "stream_count":       len(stream_list),
                 "streams": [
                     {
-                        "name":              s["logStreamName"],
-                        "last_event_time":   s.get("lastEventTimestamp", 0),
-                        "first_event_time":  s.get("firstEventTimestamp", 0),
+                        "name":             s["logStreamName"],
+                        "last_event_time":  s.get("lastEventTimestamp", 0),
+                        "first_event_time": s.get("firstEventTimestamp", 0),
                     }
                     for s in stream_list
                 ],
@@ -342,9 +378,8 @@ def aws_logs():
 
 @app.get("/aws/overview")
 def aws_overview():
-    """Full AWS resource overview for both projects."""
+    """Full AWS resource overview."""
     try:
-        # EC2
         ec2_resp  = ec2.describe_instances(
             Filters=[{"Name": "tag:Project", "Values": ["aiops"]}]
         )
@@ -360,27 +395,25 @@ def aws_overview():
                     "type":  i["InstanceType"]
                 })
 
-        # CloudWatch log groups
         groups     = cw_logs.describe_log_groups(logGroupNamePrefix="/aiops")
         log_groups = [g["logGroupName"] for g in groups.get("logGroups", [])]
 
-        # Recent logs summary
         recent = pull_real_logs(minutes_back=5)
         errors = [l for l in recent if l.get("level") == "ERROR"]
 
         return {
-            "region":          "us-east-1",
-            "account":         "000000000000 (LocalStack)",
+            "region":    "us-east-1",
+            "account":   "000000000000 (LocalStack)",
             "ec2": {
-                "total":       len(instances),
-                "running":     sum(1 for i in instances if i["state"] == "running"),
-                "instances":   instances
+                "total":     len(instances),
+                "running":   sum(1 for i in instances if i["state"] == "running"),
+                "instances": instances
             },
             "cloudwatch": {
-                "log_groups":  log_groups,
-                "recent_logs": len(recent),
+                "log_groups":    log_groups,
+                "recent_logs":   len(recent),
                 "recent_errors": len(errors),
-                "error_rate":  round(len(errors) / max(len(recent), 1) * 100, 1)
+                "error_rate":    round(len(errors) / max(len(recent), 1) * 100, 1)
             },
             "services": {
                 "auth-service":    "running",

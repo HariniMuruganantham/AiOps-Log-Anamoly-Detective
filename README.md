@@ -8,7 +8,6 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![LocalStack](https://img.shields.io/badge/LocalStack-Pro-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991?style=for-the-badge&logo=openai&logoColor=white)
-
 ![AWS CloudWatch](https://img.shields.io/badge/AWS-CloudWatch_Logs-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-Alpine-009639?style=for-the-badge&logo=nginx&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
@@ -27,6 +26,8 @@
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
 - [Features](#-features)
+- [Dashboard Screenshots](#-dashboard-screenshots)
+- [LocalStack Screenshots](#-localstack-screenshots)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [Environment Variables](#-environment-variables)
@@ -42,44 +43,20 @@
 
 Built as a portfolio project to demonstrate real-world DevOps and MLOps skills — containerisation, cloud-native observability, and AI-driven alerting — all running locally with production-grade tooling.
 
-> **Why this project?** Most anomaly detection demos are Jupyter notebooks. This one ships with Docker Compose, LocalStack CloudWatch integration, and a live React dashboard — the way it would actually be built on the job.
+> **Why this project?** Most anomaly detection demos are Jupyter notebooks. This one ships with Docker Compose, LocalStack CloudWatch integration, EC2 instance seeding, and a live React dashboard — the way it would actually be built on the job.
 
 ---
 
 ## 🏗 Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Docker Network: p1-net                   │
-│                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  auth-svc    │  │ payment-svc  │  │   inventory-svc      │  │
-│  │  Flask :5001 │  │ Flask :5002  │  │   Flask :5003        │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘  │
-│         │                 │                      │              │
-│         └─────────────────┼──────────────────────┘              │
-│                           │ PutLogEvents                        │
-│                    ┌──────▼──────────┐                          │
-│                    │   LocalStack    │                          │
-│                    │  CloudWatch     │                          │
-│                    │  Logs :4566     │                          │
-│                    └──────┬──────────┘                          │
-│                           │ GetLogEvents                        │
-│                    ┌──────▼──────────┐                          │
-│                    │    Backend      │                          │
-│                    │  FastAPI :8000  │                          │
-│                    │                 │                          │
-│                    │ Isolation Forest│                          │
-│                    │  + GPT-4o-mini  │                          │
-│                    └──────┬──────────┘                          │
-│                           │                                     │
-│                    ┌──────▼──────────┐                          │
-│                    │    Frontend     │                          │
-│                    │  React/Vite     │                          │
-│                    │  Nginx :3001    │                          │
-│                    └─────────────────┘                          │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Architecture](docs/Log-Analyser-Arch.png)
+
+| Layer | Role |
+|---|---|
+| **Microservices** | 3 Flask services push structured JSON logs to LocalStack CloudWatch via `PutLogEvents` on every request |
+| **LocalStack** | Emulates AWS CloudWatch Logs + EC2 locally — no real AWS account needed |
+| **Backend** | FastAPI pulls logs via `GetLogEvents`, runs Isolation Forest, chains anomaly clusters, calls GPT-4o-mini |
+| **Frontend** | React + Vite dashboard polls service health, displays incident cards, chart, and EC2 panel |
 
 ---
 
@@ -100,14 +77,47 @@ Built as a portfolio project to demonstrate real-world DevOps and MLOps skills �
 
 ## ✨ Features
 
-- **Real-time log ingestion** — 3 Flask microservices continuously ship logs to LocalStack CloudWatch
-- **Anomaly detection** — Isolation Forest model scores log patterns and flags outliers
-- **AI-powered reports** — GPT-4o-mini generates plain-English incident summaries from anomalous log events
-- **Service crash simulation** — trigger controlled failures via the UI to test detection
-- **Live dashboard** — React frontend polls service health and anomaly reports in real time
-- **LocalStack CloudWatch** — full AWS CloudWatch Logs API emulation locally, no real AWS account needed
-- **EC2 topology** — mock EC2 instances seeded per microservice for infrastructure visualisation
-- **Multi-stage Docker builds** — production-optimised images with non-root users
+- **Real log ingestion** — 3 Flask microservices push structured JSON logs to LocalStack CloudWatch via `PutLogEvents` on every request
+- **Anomaly detection** — Isolation Forest scores each log event across latency, error rate, and status codes; consecutive outliers are grouped into incident clusters
+- **AI-powered incident reports** — GPT-4o-mini generates plain-English summaries with root cause, estimated cause, impact, and 3-step remediation per cluster
+- **Failure propagation tracking** — RCA chaining traces how failures cascade across services and renders a visual propagation timeline
+- **Service crash simulation** — hit CRASH on any service from the dashboard; it actually degrades — latency spikes to 3–8s, error rate hits 90%, health checks fail
+- **Auto-refresh** — toggle 30-second automatic analysis polling directly from the nav bar
+- **EC2 topology panel** — mock EC2 instances seeded with `Project=aiops` tag, shown in a live infrastructure panel at the bottom of the dashboard
+- **LocalStack CloudWatch** — full AWS CloudWatch Logs + EC2 API emulation, inspectable in the LocalStack web console
+- **Multi-stage Docker builds** — production-optimised images, non-root users, HEALTHCHECK on every container
+
+---
+
+## 📸 Dashboard Screenshots
+
+### Main dashboard — service health, metrics and chart
+![Dashboard overview](docs/screenshots/dashboard-overview.png)
+
+### Incident chains — expanded cards with GPT-4o-mini reports
+![Incident chain](docs/screenshots/incident-chain.png)
+
+### EC2 instances panel — LocalStack infrastructure
+![EC2 instances](docs/screenshots/ec2-instances.png)
+
+---
+
+## ☁️ LocalStack Screenshots
+
+### LocalStack system status — EC2 and CloudWatch running
+![LocalStack Dashboard](docs/screenshots/LocalStack-Dashboard.png)
+
+### EC2 instances — 3 nodes tagged Project=aiops
+![LocalStack EC2](docs/screenshots/LocalStack-EC2.png)
+
+### CloudWatch log group — /aiops/services
+![CloudWatch log group](docs/screenshots/Cloudwatch-loggroup.png)
+
+### CloudWatch log streams — auth-service, inventory-api, payment-service
+![CloudWatch streams](docs/screenshots/cloudwatch-streams.png)
+
+### CloudWatch log events — real structured JSON from auth-service
+![CloudWatch events](docs/screenshots/cloudwatch-events.png)
 
 ---
 
@@ -115,30 +125,34 @@ Built as a portfolio project to demonstrate real-world DevOps and MLOps skills �
 
 ```
 AiOps-Log-Anamoly-Detective/
-├── backend/                  # FastAPI anomaly detection engine
-│   ├── main.py               # API routes + Isolation Forest + GPT integration
+├── backend/
+│   ├── main.py               # FastAPI routes · Isolation Forest · GPT-4o-mini · EC2 helpers
 │   ├── requirements.txt
 │   └── Dockerfile
-├── frontend/                 # React + Vite dashboard
+├── frontend/
 │   ├── src/
+│   │   ├── App.jsx           # Dark dashboard UI · incident cards · service pills · bar chart
+│   │   └── main.jsx
 │   ├── nginx.conf
 │   ├── package.json
 │   └── Dockerfile
 ├── services/
-│   ├── auth/                 # Auth microservice (Flask :5001)
-│   │   ├── app.py
-│   │   ├── requirements.txt
-│   │   └── Dockerfile
-│   ├── payment/              # Payment microservice (Flask :5002)
-│   │   ├── app.py
-│   │   ├── requirements.txt
-│   │   └── Dockerfile
-│   └── inventory/            # Inventory microservice (Flask :5003)
-│       ├── app.py
-│       ├── requirements.txt
-│       └── Dockerfile
+│   ├── auth/                 # Flask :5001 — /health /login /crash /recover + CloudWatch push
+│   ├── payment/              # Flask :5002 — /health /charge /crash /recover + CloudWatch push
+│   └── inventory/            # Flask :5003 — /health /stock /crash /recover + CloudWatch push
 ├── scripts/
-│   └── init-aws.sh           # LocalStack bootstrap (log groups + EC2 instances)
+│   └── init-aws.sh           # LocalStack bootstrap — log group, streams, EC2 instances (Project=aiops)
+├── docs/
+│   ├── Log-Analyser-Arch.png
+│   └── screenshots/
+│       ├── dashboard-overview.png
+│       ├── incident-chain.png
+│       ├── ec2-instances.png
+│       ├── LocalStack-Dashboard.png
+│       ├── LocalStack-EC2.png
+│       ├── Cloudwatch-loggroup.png
+│       ├── cloudwatch-streams.png
+│       └── cloudwatch-events.png
 ├── .env.example
 ├── .gitignore
 └── docker-compose.yml
@@ -150,7 +164,7 @@ AiOps-Log-Anamoly-Detective/
 
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with WSL2 backend on Windows)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL2 backend on Windows)
 - [LocalStack account](https://app.localstack.cloud) — free tier works
 - OpenAI API key
 
@@ -167,7 +181,7 @@ cd AiOps-Log-Anamoly-Detective
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your keys:
+Edit `.env`:
 
 ```env
 OPENAI_API_KEY=sk-...
@@ -180,24 +194,27 @@ LOCALSTACK_AUTH_TOKEN=ls-...
 docker compose up --build
 ```
 
-> First run pulls LocalStack Pro and all base images — allow 3-5 minutes.
+> First run pulls LocalStack Pro and all base images — allow 3–5 minutes.
 
-### 4. Access the dashboard
+### 4. Access services
 
 | Service | URL |
 |---|---|
 | Frontend Dashboard | http://localhost:3001 |
 | Backend API | http://localhost:8001 |
 | LocalStack | http://localhost:4566 |
+| LocalStack Console | https://app.localstack.cloud |
 | Auth Service | http://localhost:5001 |
 | Payment Service | http://localhost:5002 |
 | Inventory Service | http://localhost:5003 |
 
-### 5. Tear down
+### 5. Tear down (full reset)
 
 ```bash
 docker compose down -v
 ```
+
+> `-v` wipes the LocalStack volume so `init-aws.sh` re-seeds EC2 instances and log streams cleanly on next `up`.
 
 ---
 
@@ -215,36 +232,39 @@ docker compose down -v
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Backend health check |
-| `GET` | `/services/status` | Poll health of all 3 microservices |
-| `GET` | `/analyze` | Run anomaly detection + GPT report |
-| `POST` | `/services/{name}/crash` | Simulate a service crash |
-| `POST` | `/services/{name}/recover` | Recover a crashed service |
+| `GET` | `/services/status` | Real-time health of all 3 microservices |
+| `GET` | `/analyze` | Run anomaly detection + GPT-4o-mini reports |
+| `POST` | `/services/{name}/crash` | Degrade a service for 60s |
+| `POST` | `/services/{name}/recover` | Recover a degraded service |
+| `GET` | `/aws/ec2` | EC2 instances from LocalStack |
+| `GET` | `/aws/logs` | CloudWatch log groups and streams |
+| `GET` | `/aws/overview` | Full AWS resource summary |
 
-### Query parameters for `/analyze`
+### `/analyze` query parameters
 
-| Parameter | Default | Description |
-|---|---|---|
-| `minutes_back` | `5` | How far back to fetch logs |
-| `max_reports` | `8` | Maximum anomaly reports to return |
+| Parameter | Default | Range | Description |
+|---|---|---|---|
+| `minutes_back` | `5` | 1–60 | How far back to pull logs |
+| `max_reports` | `5` | 1–10 | Max incident reports to return |
 
 ---
 
 ## ☁️ LocalStack Integration
 
-The project uses LocalStack Pro to emulate AWS CloudWatch Logs locally. The `scripts/init-aws.sh` bootstrap script runs on container startup and creates:
+The project uses LocalStack Pro to emulate AWS CloudWatch Logs and EC2 locally. The `scripts/init-aws.sh` bootstrap script runs on container startup and:
 
-- **Log group**: `/aiops/services`
-- **Log streams**: `auth-service`, `payment-service`, `inventory-api`
-- **EC2 instances**: one per microservice for topology visualisation
+- Creates log group `/aiops/services`
+- Creates log streams `auth-service`, `payment-service`, `inventory-api`
+- Seeds 3 EC2 instances tagged `Project=aiops`, `Service=auth/payment/inventory`
 
-View your resources at [app.localstack.cloud](https://app.localstack.cloud) → Resource Browser → CloudWatch Logs.
+The backend boto3 clients point to `http://localstack:4566` — identical AWS SDK calls to real AWS, just with `endpoint_url` overridden. All resources are visible in the [LocalStack web console](https://app.localstack.cloud) under Resource Browser.
 
 ---
 
 ## 👩‍💻 Author
 
-**Harini Muruganantham**
-Junior DevOps Engineer · AiOps Enthusiast
+**Harini Muruganantham**  
+Junior DevOps Engineer · AIOps Enthusiast
 
 [![Portfolio](https://img.shields.io/badge/Portfolio-harini--devops-blue?style=flat-square&logo=vercel)](https://harini-devops-portfolio.vercel.app)
 [![GitHub](https://img.shields.io/badge/GitHub-HariniMuruganantham-181717?style=flat-square&logo=github)](https://github.com/HariniMuruganantham)
