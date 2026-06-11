@@ -92,32 +92,32 @@ Built as a portfolio project to demonstrate real-world DevOps and MLOps skills �
 ## 📸 Dashboard Screenshots
 
 ### Main dashboard — service health, metrics and chart
-![Dashboard overview](docs/screenshots/dashboard-overview.png)
+![Dashboard overview](docs/dashboard-overview.png)
 
 ### Incident chains — expanded cards with GPT-4o-mini reports
-![Incident chain](docs/screenshots/incident-chain.png)
+![Incident chain](docs/incident-chain.png)
 
 ### EC2 instances panel — LocalStack infrastructure
-![EC2 instances](docs/screenshots/ec2-instances.png)
+![EC2 instances](docs/ec2-instances.png)
 
 ---
 
 ## ☁️ LocalStack Screenshots
 
 ### LocalStack system status — EC2 and CloudWatch running
-![LocalStack Dashboard](docs/screenshots/LocalStack-Dashboard.png)
+![LocalStack Dashboard](docs/LocalStack-Dashboard.png)
 
 ### EC2 instances — 3 nodes tagged Project=aiops
-![LocalStack EC2](docs/screenshots/LocalStack-EC2.png)
+![LocalStack EC2](docs/LocalStack-EC2.png)
 
 ### CloudWatch log group — /aiops/services
-![CloudWatch log group](docs/screenshots/Cloudwatch-loggroup.png)
+![CloudWatch log group](docs/Cloudwatch-loggroup.png)
 
 ### CloudWatch log streams — auth-service, inventory-api, payment-service
-![CloudWatch streams](docs/screenshots/cloudwatch-streams.png)
+![CloudWatch streams](docs/cloudwatch-streams.png)
 
 ### CloudWatch log events — real structured JSON from auth-service
-![CloudWatch events](docs/screenshots/cloudwatch-events.png)
+![CloudWatch events](docs/cloudwatch-events.png)
 
 ---
 
